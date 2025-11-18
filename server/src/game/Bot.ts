@@ -8,15 +8,33 @@ interface BotTarget {
   distance: number;
 }
 
+type BotDifficulty = 0 | 1 | 2 | 3 | 4;
+
+interface DifficultySettings {
+  name: string;
+  reactionTime: number;
+  accuracy: number;
+  aggression: number;
+  detectionRange: number;
+  shootChance: number;
+}
+
+const DIFFICULTY_SETTINGS: Record<BotDifficulty, DifficultySettings> = {
+  0: { name: 'Very Easy', reactionTime: 800, accuracy: 0.30, aggression: 0.20, detectionRange: 300, shootChance: 0.10 },
+  1: { name: 'Easy', reactionTime: 500, accuracy: 0.50, aggression: 0.40, detectionRange: 350, shootChance: 0.20 },
+  2: { name: 'Medium', reactionTime: 300, accuracy: 0.65, aggression: 0.55, detectionRange: 400, shootChance: 0.30 },
+  3: { name: 'Hard', reactionTime: 150, accuracy: 0.80, aggression: 0.70, detectionRange: 450, shootChance: 0.40 },
+  4: { name: 'Expert', reactionTime: 80, accuracy: 0.92, aggression: 0.85, detectionRange: 500, shootChance: 0.50 }
+};
+
 export class BotEntity extends PlayerEntity {
   private aiState: 'idle' | 'hunting' | 'fleeing' | 'wandering' = 'wandering';
   private targetId: string | null = null;
   private wanderAngle: number = Math.random() * Math.PI * 2;
   private lastStateChange: number = Date.now();
   private lastDirectionChange: number = Date.now();
-  private reactionTime: number;
-  private accuracy: number;
-  private aggression: number;
+  private difficulty: BotDifficulty;
+  private settings: DifficultySettings;
   private isBot: boolean = true;
 
   constructor(
@@ -24,20 +42,12 @@ export class BotEntity extends PlayerEntity {
     username: string,
     spawnX: number,
     spawnY: number,
-    difficulty: 'medium' | 'hard' = 'medium'
+    difficulty: BotDifficulty = 2
   ) {
     super(id, username, spawnX, spawnY);
 
-    // Configure difficulty settings
-    if (difficulty === 'hard') {
-      this.reactionTime = 100; // 100ms reaction time
-      this.accuracy = 0.85; // 85% accuracy
-      this.aggression = 0.8; // 80% aggressive
-    } else {
-      this.reactionTime = 300; // 300ms reaction time
-      this.accuracy = 0.65; // 65% accuracy
-      this.aggression = 0.5; // 50% aggressive
-    }
+    this.difficulty = difficulty;
+    this.settings = DIFFICULTY_SETTINGS[difficulty];
   }
 
   // AI decision making
@@ -52,14 +62,13 @@ export class BotEntity extends PlayerEntity {
     // State machine
     if (nearestPlayer) {
       const distance = nearestPlayer.distance;
-      const detectionRange = 400;
       const fleeRange = 150;
 
       if (this.health < 30 && distance < fleeRange) {
         this.aiState = 'fleeing';
         this.targetId = nearestPlayer.id;
-      } else if (distance < detectionRange) {
-        if (Math.random() < this.aggression) {
+      } else if (distance < this.settings.detectionRange) {
+        if (Math.random() < this.settings.aggression) {
           this.aiState = 'hunting';
           this.targetId = nearestPlayer.id;
         } else {
@@ -121,11 +130,10 @@ export class BotEntity extends PlayerEntity {
     const dy = target.y - this.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
 
-    // Calculate angle to target with accuracy variance
+    // Calculate angle to target - smooth aiming (no jitter)
     const perfectAngle = Math.atan2(dy, dx);
-    const angleVariance = (1 - this.accuracy) * 0.3; // Max 30% angle error
-    const aimError = (Math.random() - 0.5) * angleVariance;
-    this.angle = perfectAngle + aimError;
+    // Only apply aim error when actually shooting, not continuously
+    this.angle = perfectAngle;
 
     // Move towards target but maintain some distance
     const optimalDistance = 250;
@@ -179,11 +187,17 @@ export class BotEntity extends PlayerEntity {
 
   // Check if bot wants to shoot (for game engine to create bullet)
   wantsToShoot(): boolean {
-    // Only shoot with some probability to avoid spamming
-    const shootChance = this.aiState === 'hunting' ? 0.3 : 0.2;
+    // Use difficulty-based shoot chance
     return this.canShoot() &&
            (this.aiState === 'hunting' || this.aiState === 'fleeing') &&
-           Math.random() < shootChance;
+           Math.random() < this.settings.shootChance;
+  }
+
+  // Apply aim error when shooting (not when aiming)
+  getShootAngle(): number {
+    const angleVariance = (1 - this.settings.accuracy) * 0.4; // Max variance based on accuracy
+    const aimError = (Math.random() - 0.5) * angleVariance;
+    return this.angle + aimError;
   }
 
   toJSON() {

@@ -47,13 +47,15 @@ export class World {
     const botName = name || `Bot${this.botIdCounter}`;
     const spawnPoint = this.getSpawnPoint();
 
-    // Random difficulty: 50% medium, 50% hard
-    const difficulty = Math.random() > 0.5 ? 'hard' : 'medium';
+    // Random difficulty from 0 to 3 (Very Easy to Hard)
+    // 0: Very Easy, 1: Easy, 2: Medium, 3: Hard
+    const difficulty = Math.floor(Math.random() * 4) as 0 | 1 | 2 | 3;
+    const difficultyNames = ['Very Easy', 'Easy', 'Medium', 'Hard'];
 
     const bot = new BotEntity(botId, botName, spawnPoint.x, spawnPoint.y, difficulty);
     this.players.set(botId, bot);
 
-    console.log(`Spawned ${difficulty} bot: ${botName}`);
+    console.log(`Spawned ${difficultyNames[difficulty]} bot: ${botName}`);
     return bot;
   }
 
@@ -143,9 +145,10 @@ export class World {
         // Bots shoot when they want to
         if (player.wantsToShoot() && player.canShoot()) {
           const spawnDistance = GAME_CONFIG.PLAYER_RADIUS + 5;
-          const bulletX = player.x + Math.cos(player.angle) * spawnDistance;
-          const bulletY = player.y + Math.sin(player.angle) * spawnDistance;
-          this.createBullet(player.id, bulletX, bulletY, player.angle);
+          const shootAngle = player.getShootAngle(); // Get angle with accuracy error applied
+          const bulletX = player.x + Math.cos(shootAngle) * spawnDistance;
+          const bulletY = player.y + Math.sin(shootAngle) * spawnDistance;
+          this.createBullet(player.id, bulletX, bulletY, shootAngle);
         }
       }
 
