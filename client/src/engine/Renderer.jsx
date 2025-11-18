@@ -12,15 +12,18 @@ import HUD from '../components/HUD';
 import Chat from '../components/Chat';
 import DamageIndicator from '../components/DamageIndicator';
 import LoadingScreen from '../components/LoadingScreen';
+import MiniMap from '../components/MiniMap';
 import useGameStore from '../store/gameStore';
 import useInventoryStore from '../store/inventoryStore';
 import { emitJoin, onPlayerJoined, onPlayerMoved, onPlayerLeft, onPlayerList, onBlockUpdate, emitPlaceBlock, emitBreakBlock, emitAttack, onTakeDamage, onPlayerDied, onPlayerRespawn } from '../utils/socket';
 import { castRay, checkPlayerCollision } from '../utils/raycaster';
 import socket from '../utils/socket';
 
-// Camera Controller Component with FPS controls
+// Camera Controller Component with third-person controls
 function CameraController({ player, world }) {
   const { camera } = useThree();
+  const [cameraDistance] = useState(5); // Distance behind player
+  const [cameraHeight] = useState(2); // Height above player
 
   useFrame(() => {
     if (!player) return;
@@ -41,9 +44,22 @@ function CameraController({ player, world }) {
     };
     player.updateRotation(cameraRotation);
 
-    // Position camera at player position (first-person view)
+    // Position camera behind player (third-person view)
     const playerPos = player.getPosition();
-    camera.position.set(playerPos.x, playerPos.y + 1.6, playerPos.z); // Eye level
+
+    // Calculate camera position behind the player
+    const cameraOffset = new THREE.Vector3();
+    camera.getWorldDirection(cameraOffset);
+    cameraOffset.y = 0;
+    cameraOffset.normalize();
+    cameraOffset.multiplyScalar(-cameraDistance); // Negative to position behind
+
+    // Set camera position
+    camera.position.set(
+      playerPos.x + cameraOffset.x,
+      playerPos.y + cameraHeight,
+      playerPos.z + cameraOffset.z
+    );
 
     // Update world chunks based on player position
     if (world) {
@@ -116,6 +132,17 @@ function Scene({ player, world, onTargetChange }) {
 
       {/* World Chunks */}
       <WorldChunks world={world} />
+
+      {/* Local Player (visible in 3rd person) */}
+      {player && (
+        <OtherPlayer
+          key="local-player"
+          playerId="local"
+          username={player.username}
+          position={playerPosition}
+          rotation={player.rotation}
+        />
+      )}
 
       {/* Other Players */}
       {otherPlayers.map((otherPlayer) => (
@@ -442,6 +469,13 @@ export default function Renderer({ username }) {
 
       {/* Chat Component */}
       <Chat isLocked={isLocked} />
+
+      {/* Mini Map */}
+      <MiniMap
+        player={playerRef.current}
+        world={worldRef.current}
+        otherPlayers={otherPlayers}
+      />
     </div>
   );
 }
