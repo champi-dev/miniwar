@@ -82,9 +82,11 @@ function PlayerMesh({ position }) {
   );
 }
 
-// World Chunks Component
+// World Chunks Component with frustum culling
 function WorldChunks({ world }) {
   const [chunks, setChunks] = useState([]);
+  const [visibleChunks, setVisibleChunks] = useState(new Set());
+  const { camera } = useThree();
 
   useEffect(() => {
     if (!world) return;
@@ -100,19 +102,54 @@ function WorldChunks({ world }) {
     return unsubscribe;
   }, [world]);
 
+  // Update visible chunks based on camera frustum
+  useFrame(() => {
+    if (!chunks.length) return;
+
+    const visible = new Set();
+    const frustum = new THREE.Frustum();
+    const projScreenMatrix = new THREE.Matrix4();
+    projScreenMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    frustum.setFromProjectionMatrix(projScreenMatrix);
+
+    chunks.forEach((chunk) => {
+      // Create bounding box for chunk
+      const chunkWorldX = chunk.x * CHUNK_SIZE + CHUNK_SIZE / 2;
+      const chunkWorldZ = chunk.z * CHUNK_SIZE + CHUNK_SIZE / 2;
+      const box = new THREE.Box3(
+        new THREE.Vector3(chunkWorldX - CHUNK_SIZE / 2, 0, chunkWorldZ - CHUNK_SIZE / 2),
+        new THREE.Vector3(chunkWorldX + CHUNK_SIZE / 2, 64, chunkWorldZ + CHUNK_SIZE / 2)
+      );
+
+      if (frustum.intersectsBox(box)) {
+        visible.add(`${chunk.x},${chunk.z}`);
+      }
+    });
+
+    setVisibleChunks(visible);
+  });
+
   return (
     <>
-      {chunks.map((chunk) => (
-        <Chunk
-          key={`${chunk.x},${chunk.z}`}
-          chunkX={chunk.x}
-          chunkZ={chunk.z}
-          chunkData={chunk.data}
-        />
-      ))}
+      {chunks.map((chunk) => {
+        const key = `${chunk.x},${chunk.z}`;
+        // Only render chunks that are in the camera's view
+        if (!visibleChunks.has(key)) return null;
+
+        return (
+          <Chunk
+            key={key}
+            chunkX={chunk.x}
+            chunkZ={chunk.z}
+            chunkData={chunk.data}
+          />
+        );
+      })}
     </>
   );
 }
+
+const CHUNK_SIZE = 16; // Need this for frustum culling calculation
 
 // Main Scene Component
 function Scene({ player, world, onTargetChange }) {

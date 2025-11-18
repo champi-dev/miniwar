@@ -1,6 +1,6 @@
 const CHUNK_SIZE = 16;
-const LOAD_RADIUS = 3; // Load chunks within this radius
-const UNLOAD_DISTANCE = 5; // Unload chunks beyond this distance
+const LOAD_RADIUS = 2; // Load chunks within this radius (reduced from 3 for performance)
+const UNLOAD_DISTANCE = 4; // Unload chunks beyond this distance (reduced from 5)
 
 export default class World {
   constructor(socket) {
