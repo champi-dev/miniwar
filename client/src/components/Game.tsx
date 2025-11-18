@@ -1,7 +1,8 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Canvas from './Canvas';
 import HUD from './UI/HUD';
 import Leaderboard from './UI/Leaderboard';
+import MobileControls from './UI/MobileControls';
 import { socketClient } from '../network/socket';
 import { inputManager } from '../game/input';
 import { useGameStore } from '../store/gameStore';
@@ -15,8 +16,23 @@ export default function Game({ username }: GameProps) {
   const lastUpdateRef = useRef<number>(Date.now());
   const lastShotRef = useRef<number>(0);
   const updateIntervalRef = useRef<number>();
+  const mobileMovementRef = useRef({ x: 0, y: 0 });
+  const mobileAngleRef = useRef(0);
+  const [isMobile, setIsMobile] = useState(false);
 
-  const { players, playerId, toggleLeaderboard } = useGameStore();
+  const { toggleLeaderboard } = useGameStore();
+
+  // Detect mobile
+  useEffect(() => {
+    const checkMobile = () => {
+      const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+      const isSmallScreen = window.innerWidth <= 768;
+      setIsMobile(isTouchDevice || isSmallScreen);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   // Connect to server and join game
   useEffect(() => {
@@ -59,25 +75,36 @@ export default function Game({ username }: GameProps) {
       const now = Date.now();
       lastUpdateRef.current = now;
 
-      // Get movement input
-      const movement = inputManager.getMovementVector();
+      // Get movement input (either keyboard or mobile joystick)
+      let movement = isMobile ? mobileMovementRef.current : inputManager.getMovementVector();
 
-      // Get mouse position and calculate angle
-      const canvas = document.querySelector('canvas');
-      if (!canvas) return;
+      // Get angle (either mouse or mobile shoot pad)
+      let angle = mobileAngleRef.current;
 
-      const mousePos = inputManager.getMousePosition();
-      const rect = canvas.getBoundingClientRect();
-      const centerX = rect.width / 2;
-      const centerY = rect.height / 2;
+      if (!isMobile) {
+        const canvas = document.querySelector('canvas');
+        if (!canvas) return;
 
-      const angle = Math.atan2(mousePos.y - centerY, mousePos.x - centerX);
+        const mousePos = inputManager.getMousePosition();
+        const rect = canvas.getBoundingClientRect();
+        const centerX = rect.width / 2;
+        const centerY = rect.height / 2;
+
+        angle = Math.atan2(mousePos.y - centerY, mousePos.x - centerX);
+      } else {
+        // On mobile, face the direction of movement (joystick direction)
+        // Shoot pad does NOT affect facing angle
+        if (movement.x !== 0 || movement.y !== 0) {
+          angle = Math.atan2(movement.y, movement.x);
+          mobileAngleRef.current = angle;
+        }
+      }
 
       // Send movement direction to server (not position)
       socketClient.sendMovement(movement.x, movement.y, angle);
 
-      // Handle shooting
-      if (inputManager.isMouseDown() && now - lastShotRef.current > FIRE_RATE) {
+      // Handle shooting (desktop only - mobile uses shoot pad)
+      if (!isMobile && inputManager.isMouseDown() && now - lastShotRef.current > FIRE_RATE) {
         socketClient.sendShoot(angle);
         lastShotRef.current = now;
       }
@@ -91,13 +118,32 @@ export default function Game({ username }: GameProps) {
         clearInterval(updateIntervalRef.current);
       }
     };
-  }, []); // Empty dependency array - only run once on mount
+  }, [isMobile]); // Only recreate when isMobile changes
+
+  // Mobile control handlers
+  const handleMobileMove = (x: number, y: number) => {
+    mobileMovementRef.current = { x, y };
+  };
+
+  const handleMobileFire = () => {
+    const now = Date.now();
+    const FIRE_RATE = 500;
+
+    if (now - lastShotRef.current > FIRE_RATE) {
+      socketClient.sendShoot(mobileAngleRef.current);
+      lastShotRef.current = now;
+    }
+  };
 
   return (
     <div ref={canvasRef} className="relative w-full h-full overflow-hidden bg-gray-900">
       <Canvas />
       <HUD />
       <Leaderboard />
+      <MobileControls
+        onMove={handleMobileMove}
+        onFire={handleMobileFire}
+      />
     </div>
   );
 }
