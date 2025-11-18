@@ -18,8 +18,8 @@ export class World {
   private pendingRespawns: Map<string, number> = new Map();
   private botIdCounter = 0;
   private lastBotSpawn = Date.now();
-  private readonly MIN_BOTS = 3;
-  private readonly MAX_BOTS = 6;
+  private readonly MIN_BOTS = 2;
+  private readonly MAX_BOTS = 4;
 
   constructor() {
     // Generate terrain

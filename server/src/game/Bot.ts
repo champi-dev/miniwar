@@ -142,16 +142,8 @@ export class BotEntity extends PlayerEntity {
       this.setMovement(Math.cos(strafeAngle) * 0.5, Math.sin(strafeAngle) * 0.5);
     }
 
-    // Shoot if can shoot and within range
-    const shootRange = 500;
-    if (distance < shootRange && this.canShoot()) {
-      // Add reaction time delay
-      if (Math.random() < this.accuracy) {
-        this.shoot();
-        // Return shoot action to be handled by game engine
-        this.lastShot = Date.now();
-      }
-    }
+    // Shooting is handled by wantsToShoot() and game engine
+    // No need to shoot here directly
   }
 
   private fleeFromTarget(target: BotTarget): void {
@@ -165,11 +157,7 @@ export class BotEntity extends PlayerEntity {
     // Still aim at target while fleeing
     this.angle = Math.atan2(dy, dx);
 
-    // Shoot while fleeing if possible
-    if (this.canShoot() && Math.random() < 0.7) {
-      this.shoot();
-      this.lastShot = Date.now();
-    }
+    // Shooting is handled by wantsToShoot() and game engine
   }
 
   private wander(now: number): void {
@@ -191,7 +179,11 @@ export class BotEntity extends PlayerEntity {
 
   // Check if bot wants to shoot (for game engine to create bullet)
   wantsToShoot(): boolean {
-    return this.canShoot() && (this.aiState === 'hunting' || this.aiState === 'fleeing');
+    // Only shoot with some probability to avoid spamming
+    const shootChance = this.aiState === 'hunting' ? 0.3 : 0.2;
+    return this.canShoot() &&
+           (this.aiState === 'hunting' || this.aiState === 'fleeing') &&
+           Math.random() < shootChance;
   }
 
   toJSON() {
