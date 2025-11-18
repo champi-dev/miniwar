@@ -2,6 +2,7 @@ import { PlayerEntity } from './Player.js';
 import { BulletEntity } from './Bullet.js';
 import { TerrainGenerator } from './Terrain.js';
 import { Physics } from './Physics.js';
+import { databaseService } from '../services/DatabaseService.js';
 import {
   TerrainObject,
   PlayerDeathPayload,
@@ -23,7 +24,22 @@ export class World {
 
   addPlayer(id: string, username: string): PlayerEntity {
     const spawnPoint = this.getSpawnPoint();
-    const player = new PlayerEntity(id, username, spawnPoint.x, spawnPoint.y);
+
+    // Load existing stats from database if available
+    const existingStats = databaseService.getPlayerStats(username);
+
+    const player = new PlayerEntity(
+      id,
+      username,
+      spawnPoint.x,
+      spawnPoint.y,
+      existingStats ? {
+        kills: existingStats.kills,
+        deaths: existingStats.deaths,
+        score: existingStats.score
+      } : undefined
+    );
+
     this.players.set(id, player);
     return player;
   }

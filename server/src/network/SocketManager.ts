@@ -1,5 +1,6 @@
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import { GameEngine } from '../game/GameEngine.js';
+import { usernameService } from '../services/UsernameService.js';
 import {
   PlayerJoinPayload,
   PlayerMovePayload,
@@ -15,9 +16,32 @@ export class SocketManager {
     this.gameEngine = new GameEngine(io);
   }
 
+  /**
+   * Get client IP address from socket
+   */
+  private getClientIP(socket: Socket): string {
+    // Try to get real IP from headers (for proxies/load balancers)
+    const forwarded = socket.handshake.headers['x-forwarded-for'];
+    if (forwarded) {
+      // x-forwarded-for can contain multiple IPs, get the first one
+      const ips = typeof forwarded === 'string' ? forwarded.split(',') : forwarded;
+      return ips[0].trim();
+    }
+
+    // Fallback to direct connection IP
+    return socket.handshake.address;
+  }
+
   initialize(): void {
     this.io.on('connection', (socket: Socket) => {
-      console.log(`Client connected: ${socket.id}`);
+      const clientIP = this.getClientIP(socket);
+      console.log(`Client connected: ${socket.id} from IP: ${clientIP}`);
+
+      // Send saved username to client if available
+      const savedUsername = usernameService.getUsername(clientIP);
+      if (savedUsername) {
+        socket.emit('username:saved', { username: savedUsername });
+      }
 
       // Handle player join
       socket.on('player:join', (data: PlayerJoinPayload) => {
@@ -30,7 +54,10 @@ export class SocketManager {
             return;
           }
 
-          console.log(`Player joined: ${username} (${socket.id})`);
+          console.log(`Player joined: ${username} (${socket.id}) from IP: ${clientIP}`);
+
+          // Save username for this IP address
+          usernameService.saveUsername(clientIP, username);
 
           // Add player to game
           const player = this.gameEngine.addPlayer(socket.id, username);

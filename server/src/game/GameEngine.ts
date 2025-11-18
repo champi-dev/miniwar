@@ -1,5 +1,6 @@
 import { World } from './World.js';
 import { GAME_CONFIG } from '../types/game.types.js';
+import { LeaderboardService } from '../services/LeaderboardService.js';
 import type { Server as SocketIOServer } from 'socket.io';
 
 export class GameEngine {
@@ -8,12 +9,14 @@ export class GameEngine {
   private lastUpdate: number;
   private lastLeaderboardUpdate: number;
   private isRunning: boolean = false;
+  private leaderboardService: LeaderboardService;
 
   constructor(io: SocketIOServer) {
     this.io = io;
     this.world = new World();
     this.lastUpdate = Date.now();
     this.lastLeaderboardUpdate = Date.now();
+    this.leaderboardService = new LeaderboardService();
   }
 
   start(): void {
@@ -69,24 +72,21 @@ export class GameEngine {
   }
 
   private broadcastLeaderboard(): void {
-    const players = Array.from(this.world.players.values())
-      .map(p => ({
-        playerId: p.id,
-        username: p.username,
-        score: p.score,
-        kills: p.kills,
-        deaths: p.deaths,
-        kd: p.deaths > 0 ? p.kills / p.deaths : p.kills,
-        rank: 0
-      }))
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 10)
-      .map((entry, index) => ({
-        ...entry,
-        rank: index + 1
-      }));
+    // Update leaderboard with current active players
+    for (const player of this.world.players.values()) {
+      this.leaderboardService.updatePlayer(
+        player.id,
+        player.username,
+        player.score,
+        player.kills,
+        player.deaths
+      );
+    }
 
-    this.io.emit('leaderboard:update', { entries: players });
+    // Get top players from database (persistent leaderboard)
+    const entries = this.leaderboardService.getTop(10);
+
+    this.io.emit('leaderboard:update', { entries });
   }
 
   // Player actions
@@ -96,6 +96,19 @@ export class GameEngine {
   }
 
   removePlayer(socketId: string) {
+    // Save player stats before removing
+    const player = this.world.players.get(socketId);
+    if (player) {
+      this.leaderboardService.updatePlayer(
+        player.id,
+        player.username,
+        player.score,
+        player.kills,
+        player.deaths
+      );
+      this.leaderboardService.removePlayer(player.id);
+    }
+
     this.world.removePlayer(socketId);
   }
 

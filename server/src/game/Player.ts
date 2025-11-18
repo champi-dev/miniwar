@@ -18,7 +18,13 @@ export class PlayerEntity implements PlayerType {
   private velocityX: number = 0;
   private velocityY: number = 0;
 
-  constructor(id: string, username: string, spawnX: number, spawnY: number) {
+  constructor(
+    id: string,
+    username: string,
+    spawnX: number,
+    spawnY: number,
+    existingStats?: { kills: number; deaths: number; score: number }
+  ) {
     this.id = id;
     this.username = username;
     this.x = spawnX;
@@ -26,9 +32,12 @@ export class PlayerEntity implements PlayerType {
     this.angle = 0;
     this.health = GAME_CONFIG.PLAYER_MAX_HEALTH;
     this.maxHealth = GAME_CONFIG.PLAYER_MAX_HEALTH;
-    this.score = 0;
-    this.kills = 0;
-    this.deaths = 0;
+
+    // Load existing stats if available, otherwise start fresh
+    this.score = existingStats?.score ?? 0;
+    this.kills = existingStats?.kills ?? 0;
+    this.deaths = existingStats?.deaths ?? 0;
+
     this.color = this.generateColor();
     this.isAlive = true;
     this.lastShot = 0;

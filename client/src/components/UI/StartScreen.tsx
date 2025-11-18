@@ -1,12 +1,22 @@
-import { useState, FormEvent } from 'react';
+import { useState, useEffect, FormEvent } from 'react';
 
 interface StartScreenProps {
   onJoin: (username: string) => void;
 }
 
+const USERNAME_STORAGE_KEY = 'voxelwars_username';
+
 export default function StartScreen({ onJoin }: StartScreenProps) {
   const [username, setUsername] = useState('');
   const [error, setError] = useState('');
+
+  // Load saved username from localStorage on mount
+  useEffect(() => {
+    const savedUsername = localStorage.getItem(USERNAME_STORAGE_KEY);
+    if (savedUsername) {
+      setUsername(savedUsername);
+    }
+  }, []);
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -22,6 +32,10 @@ export default function StartScreen({ onJoin }: StartScreenProps) {
     }
 
     setError('');
+
+    // Save username to localStorage
+    localStorage.setItem(USERNAME_STORAGE_KEY, username);
+
     onJoin(username);
   };
 
