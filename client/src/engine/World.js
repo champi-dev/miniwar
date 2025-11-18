@@ -151,6 +151,54 @@ export default class World {
   }
 
   /**
+   * Get block type at world position
+   * @param {number} worldX - World X coordinate
+   * @param {number} worldY - World Y coordinate
+   * @param {number} worldZ - World Z coordinate
+   * @returns {string|null} - Block type or null if chunk not loaded
+   */
+  getBlockAt(worldX, worldY, worldZ) {
+    // Calculate chunk coordinates
+    const chunkX = Math.floor(worldX / CHUNK_SIZE);
+    const chunkZ = Math.floor(worldZ / CHUNK_SIZE);
+
+    // Get chunk
+    const chunk = this.getChunk(chunkX, chunkZ);
+    if (!chunk) {
+      return null; // Chunk not loaded
+    }
+
+    // Calculate local coordinates within chunk
+    const localX = ((worldX % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
+    const localY = Math.floor(worldY);
+    const localZ = ((worldZ % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
+
+    // Check bounds
+    if (localY < 0 || localY >= 64) {
+      return 'air'; // Out of vertical bounds
+    }
+
+    // Get block from chunk data
+    if (chunk.data[localX] && chunk.data[localX][localY]) {
+      return chunk.data[localX][localY][localZ];
+    }
+
+    return 'air'; // Default to air if data missing
+  }
+
+  /**
+   * Check if block at position is solid (not air)
+   * @param {number} worldX - World X coordinate
+   * @param {number} worldY - World Y coordinate
+   * @param {number} worldZ - World Z coordinate
+   * @returns {boolean} - True if block is solid
+   */
+  isBlockSolid(worldX, worldY, worldZ) {
+    const blockType = this.getBlockAt(worldX, worldY, worldZ);
+    return blockType !== null && blockType !== 'air';
+  }
+
+  /**
    * Cleanup
    */
   destroy() {

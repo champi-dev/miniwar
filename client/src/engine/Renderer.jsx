@@ -174,6 +174,9 @@ export default function Renderer({ username }) {
     // Initialize world
     worldRef.current = new World(socket);
 
+    // Connect world to player for collision detection
+    playerRef.current.setWorld(worldRef.current);
+
     // Give player starter blocks for testing
     giveStarterBlocks();
 

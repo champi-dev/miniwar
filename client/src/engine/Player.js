@@ -8,6 +8,11 @@ export default class Player {
     this.rotation = { x: 0, y: 0 };
     this.health = 100;
     this.isGrounded = false;
+    this.world = null; // Reference to world for collision detection
+
+    // Player bounding box dimensions
+    this.width = 0.6;  // Player width (X and Z)
+    this.height = 1.8; // Player height (Y)
 
     // Movement parameters
     this.moveSpeed = 0.2;
@@ -40,6 +45,54 @@ export default class Player {
 
     this.setupKeyboardControls();
     this.setupMouseControls();
+  }
+
+  /**
+   * Set world reference for collision detection
+   */
+  setWorld(world) {
+    this.world = world;
+  }
+
+  /**
+   * Check if player would collide with blocks at given position
+   * @param {number} x - X position to check
+   * @param {number} y - Y position to check
+   * @param {number} z - Z position to check
+   * @returns {boolean} - True if collision detected
+   */
+  checkCollision(x, y, z) {
+    if (!this.world) return false;
+
+    const halfWidth = this.width / 2;
+
+    // Check corners of player bounding box at different heights
+    const checkPoints = [
+      // Bottom corners
+      { x: x - halfWidth, y: y, z: z - halfWidth },
+      { x: x + halfWidth, y: y, z: z - halfWidth },
+      { x: x - halfWidth, y: y, z: z + halfWidth },
+      { x: x + halfWidth, y: y, z: z + halfWidth },
+      // Middle corners
+      { x: x - halfWidth, y: y + 0.9, z: z - halfWidth },
+      { x: x + halfWidth, y: y + 0.9, z: z - halfWidth },
+      { x: x - halfWidth, y: y + 0.9, z: z + halfWidth },
+      { x: x + halfWidth, y: y + 0.9, z: z + halfWidth },
+      // Top corners
+      { x: x - halfWidth, y: y + this.height, z: z - halfWidth },
+      { x: x + halfWidth, y: y + this.height, z: z - halfWidth },
+      { x: x - halfWidth, y: y + this.height, z: z + halfWidth },
+      { x: x + halfWidth, y: y + this.height, z: z + halfWidth },
+    ];
+
+    // Check if any point collides with a solid block
+    for (const point of checkPoints) {
+      if (this.world.isBlockSolid(Math.floor(point.x), Math.floor(point.y), Math.floor(point.z))) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   setupKeyboardControls() {
@@ -148,8 +201,20 @@ export default class Player {
       direction.x /= length;
       direction.z /= length;
     }
-    this.position.x += direction.x * this.moveSpeed;
-    this.position.z += direction.z * this.moveSpeed;
+
+    // Try to move with collision detection
+    const newX = this.position.x + direction.x * this.moveSpeed;
+    const newZ = this.position.z + direction.z * this.moveSpeed;
+
+    // Check X movement separately for sliding
+    if (!this.checkCollision(newX, this.position.y, this.position.z)) {
+      this.position.x = newX;
+    }
+
+    // Check Z movement separately for sliding
+    if (!this.checkCollision(this.position.x, this.position.y, newZ)) {
+      this.position.z = newZ;
+    }
   }
 
   moveBackward(cameraDirection) {
@@ -159,8 +224,17 @@ export default class Player {
       direction.x /= length;
       direction.z /= length;
     }
-    this.position.x -= direction.x * this.moveSpeed;
-    this.position.z -= direction.z * this.moveSpeed;
+
+    const newX = this.position.x - direction.x * this.moveSpeed;
+    const newZ = this.position.z - direction.z * this.moveSpeed;
+
+    if (!this.checkCollision(newX, this.position.y, this.position.z)) {
+      this.position.x = newX;
+    }
+
+    if (!this.checkCollision(this.position.x, this.position.y, newZ)) {
+      this.position.z = newZ;
+    }
   }
 
   strafeLeft(cameraDirection) {
@@ -174,8 +248,17 @@ export default class Player {
       right.x /= length;
       right.z /= length;
     }
-    this.position.x -= right.x * this.moveSpeed;
-    this.position.z -= right.z * this.moveSpeed;
+
+    const newX = this.position.x - right.x * this.moveSpeed;
+    const newZ = this.position.z - right.z * this.moveSpeed;
+
+    if (!this.checkCollision(newX, this.position.y, this.position.z)) {
+      this.position.x = newX;
+    }
+
+    if (!this.checkCollision(this.position.x, this.position.y, newZ)) {
+      this.position.z = newZ;
+    }
   }
 
   strafeRight(cameraDirection) {
@@ -188,8 +271,17 @@ export default class Player {
       right.x /= length;
       right.z /= length;
     }
-    this.position.x += right.x * this.moveSpeed;
-    this.position.z += right.z * this.moveSpeed;
+
+    const newX = this.position.x + right.x * this.moveSpeed;
+    const newZ = this.position.z + right.z * this.moveSpeed;
+
+    if (!this.checkCollision(newX, this.position.y, this.position.z)) {
+      this.position.x = newX;
+    }
+
+    if (!this.checkCollision(this.position.x, this.position.y, newZ)) {
+      this.position.z = newZ;
+    }
   }
 
   jump() {
@@ -225,18 +317,45 @@ export default class Player {
       this.velocity.y = this.terminalVelocity;
     }
 
-    // Apply velocity to position
-    this.position.y += this.velocity.y;
+    // Apply vertical velocity
+    const newY = this.position.y + this.velocity.y;
 
-    // Ground collision - stop at terrain level
-    // For now, use a fixed ground level of y=20 (we'll improve this with proper terrain collision later)
-    const groundLevel = 18; // Slightly above average terrain height
-    if (this.position.y <= groundLevel) {
-      this.position.y = groundLevel;
-      this.velocity.y = 0;
-      this.isGrounded = true;
+    // Check vertical collision
+    if (this.velocity.y < 0) {
+      // Falling - check for ground collision
+      if (this.checkCollision(this.position.x, newY, this.position.z)) {
+        // Hit ground - stop falling
+        // Find exact ground level by checking upward from current position
+        let groundY = Math.floor(newY);
+        for (let y = groundY; y <= this.position.y + 2; y++) {
+          if (!this.checkCollision(this.position.x, y, this.position.z)) {
+            this.position.y = y;
+            break;
+          }
+        }
+        this.velocity.y = 0;
+        this.isGrounded = true;
+      } else {
+        // Continue falling
+        this.position.y = newY;
+        this.isGrounded = false;
+      }
+    } else if (this.velocity.y > 0) {
+      // Jumping/rising - check for ceiling collision
+      if (this.checkCollision(this.position.x, newY, this.position.z)) {
+        // Hit ceiling - stop rising
+        this.velocity.y = 0;
+      } else {
+        this.position.y = newY;
+        this.isGrounded = false;
+      }
     } else {
-      this.isGrounded = false;
+      // Not moving vertically - check if still on ground
+      if (this.checkCollision(this.position.x, this.position.y - 0.1, this.position.z)) {
+        this.isGrounded = true;
+      } else {
+        this.isGrounded = false;
+      }
     }
   }
 
