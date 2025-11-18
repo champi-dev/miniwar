@@ -13,7 +13,12 @@ const MAX_HEIGHT = 50;  // Increased for mountains
 const TERRAIN_SCALE = 0.02; // Larger features
 const OCTAVES = 6; // More detail
 const MOUNTAIN_SCALE = 0.01; // Large mountain features
-const TREE_PROBABILITY = 0.05; // 5% chance per grass block
+const TREE_PROBABILITY = 0.03; // 3% chance per grass block
+const TALL_GRASS_PROBABILITY = 0.15; // 15% chance for tall grass
+const FLOWER_PROBABILITY = 0.05; // 5% chance for flowers
+const WATER_LEVEL = 12; // Sea level
+const SAND_DEPTH = 3; // Blocks of sand near water
+const SNOW_HEIGHT = 40; // Snow appears above this height
 
 // Block types
 export const BlockType = {
@@ -23,7 +28,11 @@ export const BlockType = {
   STONE: 'stone',
   WOOD: 'wood',
   LEAVES: 'leaves',
-  WATER: 'water'
+  WATER: 'water',
+  SAND: 'sand',
+  SNOW: 'snow',
+  TALL_GRASS: 'tall_grass',
+  FLOWERS: 'flowers'
 };
 
 /**
@@ -102,23 +111,42 @@ export function generateChunk(chunkX, chunkZ) {
 
   // Fill in terrain based on height map
   const treePositions = []; // Store tree positions for later generation
+  const grassPositions = []; // Store positions for vegetation
 
   for (let x = 0; x < CHUNK_SIZE; x++) {
     for (let z = 0; z < CHUNK_SIZE; z++) {
       const terrainHeight = heightMap[x][z];
+      const isNearWater = terrainHeight <= WATER_LEVEL + SAND_DEPTH;
+      const isMountainTop = terrainHeight >= SNOW_HEIGHT;
 
       for (let y = 0; y < terrainHeight; y++) {
         if (y === terrainHeight - 1) {
-          // Top layer is grass
-          chunk[x][y][z] = BlockType.GRASS;
+          // Top layer varies by biome
+          if (isMountainTop) {
+            // Mountain peaks are snow
+            chunk[x][y][z] = BlockType.SNOW;
+          } else if (isNearWater && terrainHeight >= WATER_LEVEL) {
+            // Near water but above sea level = sand
+            chunk[x][y][z] = BlockType.SAND;
+          } else if (terrainHeight >= WATER_LEVEL) {
+            // Regular land = grass
+            chunk[x][y][z] = BlockType.GRASS;
 
-          // Chance to spawn a tree on grass (not too high, not too low)
-          if (terrainHeight > 10 && terrainHeight < 35 && Math.random() < TREE_PROBABILITY) {
-            treePositions.push({ x, y: terrainHeight, z });
+            // Store for vegetation (not on sand or snow)
+            if (!isNearWater && !isMountainTop) {
+              grassPositions.push({ x, y: terrainHeight, z });
+            }
+          } else {
+            // Underwater = dirt
+            chunk[x][y][z] = BlockType.DIRT;
           }
         } else if (y >= terrainHeight - 4) {
-          // Next 3 layers are dirt
-          chunk[x][y][z] = BlockType.DIRT;
+          // Next 3-4 layers are dirt or sand near water
+          if (isNearWater && y >= terrainHeight - 2) {
+            chunk[x][y][z] = BlockType.SAND;
+          } else {
+            chunk[x][y][z] = BlockType.DIRT;
+          }
         } else {
           // Everything below is stone
           chunk[x][y][z] = BlockType.STONE;
@@ -126,11 +154,30 @@ export function generateChunk(chunkX, chunkZ) {
       }
 
       // Add water at low elevations
-      const WATER_LEVEL = 12;
       if (terrainHeight < WATER_LEVEL) {
         for (let y = terrainHeight; y < WATER_LEVEL; y++) {
           chunk[x][y][z] = BlockType.WATER;
         }
+      }
+    }
+  }
+
+  // Add vegetation to grass positions
+  for (const pos of grassPositions) {
+    const rand = Math.random();
+
+    if (rand < TREE_PROBABILITY) {
+      // Spawn a tree
+      treePositions.push(pos);
+    } else if (rand < TREE_PROBABILITY + TALL_GRASS_PROBABILITY) {
+      // Spawn tall grass (one block above ground)
+      if (pos.y < CHUNK_HEIGHT - 1) {
+        chunk[pos.x][pos.y][pos.z] = BlockType.TALL_GRASS;
+      }
+    } else if (rand < TREE_PROBABILITY + TALL_GRASS_PROBABILITY + FLOWER_PROBABILITY) {
+      // Spawn flowers
+      if (pos.y < CHUNK_HEIGHT - 1) {
+        chunk[pos.x][pos.y][pos.z] = BlockType.FLOWERS;
       }
     }
   }
@@ -151,6 +198,21 @@ export function generateChunk(chunkX, chunkZ) {
  * @param {number} z - Local Z coordinate
  */
 function generateTree(chunk, x, y, z) {
+  const treeType = Math.random();
+
+  if (treeType < 0.7) {
+    // Oak tree (70% chance)
+    generateOakTree(chunk, x, y, z);
+  } else {
+    // Pine tree (30% chance)
+    generatePineTree(chunk, x, y, z);
+  }
+}
+
+/**
+ * Generate an oak tree (round canopy)
+ */
+function generateOakTree(chunk, x, y, z) {
   const TREE_HEIGHT = 5 + Math.floor(Math.random() * 3); // 5-7 blocks tall
   const TRUNK_HEIGHT = TREE_HEIGHT - 2;
 
@@ -162,32 +224,97 @@ function generateTree(chunk, x, y, z) {
     }
   }
 
-  // Generate leaves (3x3x3 cube at top)
-  const leavesY = y + TRUNK_HEIGHT;
-  for (let dx = -1; dx <= 1; dx++) {
-    for (let dz = -1; dz <= 1; dz++) {
-      for (let dy = 0; dy < 3; dy++) {
-        const leafX = x + dx;
-        const leafZ = z + dz;
-        const leafY = leavesY + dy;
+  // Generate leaves (round shape)
+  const leavesY = y + TRUNK_HEIGHT - 1;
 
-        // Check bounds
-        if (leafX >= 0 && leafX < CHUNK_SIZE &&
-            leafZ >= 0 && leafZ < CHUNK_SIZE &&
-            leafY < CHUNK_HEIGHT) {
+  // Bottom layer (5x5)
+  for (let dx = -2; dx <= 2; dx++) {
+    for (let dz = -2; dz <= 2; dz++) {
+      const leafX = x + dx;
+      const leafZ = z + dz;
 
-          // Don't overwrite trunk
-          if (!(dx === 0 && dz === 0 && dy === 0)) {
-            chunk[leafX][leafY][leafZ] = BlockType.LEAVES;
-          }
+      // Skip corners to make it round
+      if (Math.abs(dx) === 2 && Math.abs(dz) === 2) continue;
+
+      if (leafX >= 0 && leafX < CHUNK_SIZE && leafZ >= 0 && leafZ < CHUNK_SIZE && leavesY < CHUNK_HEIGHT) {
+        if (chunk[leafX][leavesY][leafZ] === BlockType.AIR) {
+          chunk[leafX][leavesY][leafZ] = BlockType.LEAVES;
         }
       }
     }
   }
 
-  // Add top leaf
-  if (leavesY + 3 < CHUNK_HEIGHT) {
-    chunk[x][leavesY + 3][z] = BlockType.LEAVES;
+  // Middle layer (3x3)
+  for (let dx = -1; dx <= 1; dx++) {
+    for (let dz = -1; dz <= 1; dz++) {
+      const leafX = x + dx;
+      const leafZ = z + dz;
+      const leafY = leavesY + 1;
+
+      if (leafX >= 0 && leafX < CHUNK_SIZE && leafZ >= 0 && leafZ < CHUNK_SIZE && leafY < CHUNK_HEIGHT) {
+        chunk[leafX][leafY][leafZ] = BlockType.LEAVES;
+      }
+    }
+  }
+
+  // Top layers (smaller)
+  for (let dy = 2; dy <= 3; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dz = -1; dz <= 1; dz++) {
+        const leafX = x + dx;
+        const leafZ = z + dz;
+        const leafY = leavesY + dy;
+
+        // Skip corners at top
+        if (dy === 3 && (Math.abs(dx) + Math.abs(dz) > 1)) continue;
+
+        if (leafX >= 0 && leafX < CHUNK_SIZE && leafZ >= 0 && leafZ < CHUNK_SIZE && leafY < CHUNK_HEIGHT) {
+          chunk[leafX][leafY][leafZ] = BlockType.LEAVES;
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Generate a pine tree (conical shape)
+ */
+function generatePineTree(chunk, x, y, z) {
+  const TREE_HEIGHT = 7 + Math.floor(Math.random() * 4); // 7-10 blocks tall
+
+  // Generate trunk
+  for (let dy = 0; dy < TREE_HEIGHT; dy++) {
+    const blockY = y + dy;
+    if (blockY < CHUNK_HEIGHT) {
+      chunk[x][blockY][z] = BlockType.WOOD;
+    }
+  }
+
+  // Generate conical leaves
+  let radius = 2;
+  for (let dy = Math.floor(TREE_HEIGHT * 0.3); dy < TREE_HEIGHT; dy++) {
+    const leafY = y + dy;
+
+    // Decrease radius as we go up
+    if (dy > TREE_HEIGHT * 0.6) radius = 1;
+    if (dy > TREE_HEIGHT * 0.8) radius = 0;
+
+    for (let dx = -radius; dx <= radius; dx++) {
+      for (let dz = -radius; dz <= radius; dz++) {
+        const leafX = x + dx;
+        const leafZ = z + dz;
+
+        // Make it circular
+        if (dx * dx + dz * dz <= radius * radius) {
+          if (leafX >= 0 && leafX < CHUNK_SIZE && leafZ >= 0 && leafZ < CHUNK_SIZE && leafY < CHUNK_HEIGHT) {
+            // Don't overwrite trunk
+            if (!(dx === 0 && dz === 0)) {
+              chunk[leafX][leafY][leafZ] = BlockType.LEAVES;
+            }
+          }
+        }
+      }
+    }
   }
 }
 

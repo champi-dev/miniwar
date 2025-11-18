@@ -3,9 +3,10 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { initDatabase } from './db.js';
+import { initDatabase, getAllAIBiomes } from './db.js';
 import { getOrGenerateChunk, saveChunkToDB, updateBlock } from './chunkManager.js';
 import * as GameLogic from './gameLogic.js';
+import { initAI, generateBiome, generateStructureTemplate, generateMultipleBiomes, generateMultipleStructures } from './aiContentGenerator.js';
 
 const ATTACK_DAMAGE = 25;
 const ATTACK_RANGE = 3;
@@ -27,6 +28,12 @@ const PORT = 3001;
 
 // Initialize database
 initDatabase();
+
+// Initialize AI (optional - won't fail if no API key)
+const aiEnabled = initAI();
+
+// Middleware to parse JSON in HTTP requests
+app.use(express.json());
 
 // Serve static files from client/dist in production
 app.use(express.static(path.join(__dirname, '../client/dist')));
@@ -249,8 +256,138 @@ app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
     players: GameLogic.getPlayerCount(),
-    uptime: process.uptime()
+    uptime: process.uptime(),
+    aiEnabled
   });
+});
+
+// ===== AI ADMIN ENDPOINTS =====
+
+/**
+ * GET /api/ai/biomes - Get all AI-generated biomes
+ */
+app.get('/api/ai/biomes', (req, res) => {
+  try {
+    const biomes = getAllAIBiomes();
+    res.json({
+      success: true,
+      count: biomes.length,
+      biomes
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/ai/biome - Generate a single biome
+ */
+app.post('/api/ai/biome', async (req, res) => {
+  if (!aiEnabled) {
+    return res.status(503).json({
+      success: false,
+      error: 'AI generation is disabled. Set OPENAI_API_KEY environment variable.'
+    });
+  }
+
+  try {
+    const biome = await generateBiome();
+    res.json({
+      success: true,
+      biome
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/ai/biomes/batch - Generate multiple biomes
+ * Body: { count: number }
+ */
+app.post('/api/ai/biomes/batch', async (req, res) => {
+  if (!aiEnabled) {
+    return res.status(503).json({
+      success: false,
+      error: 'AI generation is disabled. Set OPENAI_API_KEY environment variable.'
+    });
+  }
+
+  try {
+    const count = req.body.count || 5;
+    const biomes = await generateMultipleBiomes(count);
+    res.json({
+      success: true,
+      count: biomes.length,
+      biomes
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/ai/structure - Generate a single structure
+ * Body: { type: string }
+ */
+app.post('/api/ai/structure', async (req, res) => {
+  if (!aiEnabled) {
+    return res.status(503).json({
+      success: false,
+      error: 'AI generation is disabled. Set OPENAI_API_KEY environment variable.'
+    });
+  }
+
+  try {
+    const type = req.body.type || 'house';
+    const structure = await generateStructureTemplate(type);
+    res.json({
+      success: true,
+      structure
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/ai/structures/batch - Generate multiple structures
+ * Body: { types: string[] }
+ */
+app.post('/api/ai/structures/batch', async (req, res) => {
+  if (!aiEnabled) {
+    return res.status(503).json({
+      success: false,
+      error: 'AI generation is disabled. Set OPENAI_API_KEY environment variable.'
+    });
+  }
+
+  try {
+    const types = req.body.types || ['house', 'tower', 'ruins', 'temple', 'shrine'];
+    const structures = await generateMultipleStructures(types);
+    res.json({
+      success: true,
+      count: structures.length,
+      structures
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
 });
 
 // Start server

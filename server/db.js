@@ -56,6 +56,27 @@ export function initDatabase() {
     )
   `);
 
+  // Create AI-generated biomes table
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS ai_biomes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      data TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // Create AI-generated structure templates table
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS ai_structure_templates (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      type TEXT NOT NULL,
+      data TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
   // Create indices for better performance
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_chunks_coords ON chunks(x, z);
@@ -202,6 +223,102 @@ export function loadStructuresInChunk(chunkX, chunkZ) {
   `);
 
   return stmt.all(minX, maxX, minZ, maxZ);
+}
+
+// ===== AI Content Functions =====
+
+/**
+ * Save an AI-generated biome
+ */
+export function saveAIBiome(name, biomeData) {
+  const stmt = db.prepare(`
+    INSERT INTO ai_biomes (name, data)
+    VALUES (?, ?)
+    ON CONFLICT(name)
+    DO UPDATE SET data = ?, created_at = CURRENT_TIMESTAMP
+  `);
+
+  const dataJson = JSON.stringify(biomeData);
+  stmt.run(name, dataJson, dataJson);
+}
+
+/**
+ * Get all AI-generated biomes
+ */
+export function getAllAIBiomes() {
+  const stmt = db.prepare('SELECT * FROM ai_biomes ORDER BY created_at DESC');
+  const rows = stmt.all();
+  return rows.map(row => ({
+    id: row.id,
+    name: row.name,
+    data: JSON.parse(row.data),
+    createdAt: row.created_at
+  }));
+}
+
+/**
+ * Get a random AI biome
+ */
+export function getRandomAIBiome() {
+  const stmt = db.prepare('SELECT * FROM ai_biomes ORDER BY RANDOM() LIMIT 1');
+  const row = stmt.get();
+
+  if (row) {
+    return {
+      id: row.id,
+      name: row.name,
+      data: JSON.parse(row.data),
+      createdAt: row.created_at
+    };
+  }
+  return null;
+}
+
+/**
+ * Save an AI-generated structure template
+ */
+export function saveAIStructureTemplate(name, type, templateData) {
+  const stmt = db.prepare(`
+    INSERT INTO ai_structure_templates (name, type, data)
+    VALUES (?, ?, ?)
+  `);
+
+  const dataJson = JSON.stringify(templateData);
+  stmt.run(name, type, dataJson);
+}
+
+/**
+ * Get all AI structure templates of a specific type
+ */
+export function getAIStructureTemplatesByType(type) {
+  const stmt = db.prepare('SELECT * FROM ai_structure_templates WHERE type = ? ORDER BY created_at DESC');
+  const rows = stmt.all(type);
+  return rows.map(row => ({
+    id: row.id,
+    name: row.name,
+    type: row.type,
+    data: JSON.parse(row.data),
+    createdAt: row.created_at
+  }));
+}
+
+/**
+ * Get a random AI structure template of a specific type
+ */
+export function getRandomAIStructureTemplate(type) {
+  const stmt = db.prepare('SELECT * FROM ai_structure_templates WHERE type = ? ORDER BY RANDOM() LIMIT 1');
+  const row = stmt.get(type);
+
+  if (row) {
+    return {
+      id: row.id,
+      name: row.name,
+      type: row.type,
+      data: JSON.parse(row.data),
+      createdAt: row.created_at
+    };
+  }
+  return null;
 }
 
 /**

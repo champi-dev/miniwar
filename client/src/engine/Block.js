@@ -6,18 +6,26 @@ export const BlockType = {
   STONE: 'stone',
   WOOD: 'wood',
   LEAVES: 'leaves',
-  WATER: 'water'
+  WATER: 'water',
+  SAND: 'sand',
+  SNOW: 'snow',
+  TALL_GRASS: 'tall_grass',
+  FLOWERS: 'flowers'
 };
 
 // Block color mapping
 export const BlockColors = {
-  [BlockType.GRASS]: '#7EC850',
-  [BlockType.DIRT]: '#8B4513',
-  [BlockType.STONE]: '#808080',
-  [BlockType.WOOD]: '#8B4513',
-  [BlockType.LEAVES]: '#228B22',
-  [BlockType.WATER]: '#4A90E2',
-  [BlockType.AIR]: '#000000' // Not rendered
+  [BlockType.GRASS]: '#7EC850',      // Bright green
+  [BlockType.DIRT]: '#8B4513',       // Brown
+  [BlockType.STONE]: '#808080',      // Gray
+  [BlockType.WOOD]: '#8B4513',       // Dark brown
+  [BlockType.LEAVES]: '#228B22',     // Forest green
+  [BlockType.WATER]: '#4A90E2',      // Blue
+  [BlockType.SAND]: '#F4E4C1',       // Sandy beige
+  [BlockType.SNOW]: '#FFFFFF',       // White
+  [BlockType.TALL_GRASS]: '#90EE90', // Light green
+  [BlockType.FLOWERS]: '#FF69B4',    // Pink/magenta
+  [BlockType.AIR]: '#000000'         // Not rendered
 };
 
 export default class Block {

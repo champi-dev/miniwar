@@ -7,6 +7,10 @@ const useInventoryStore = create((set, get) => ({
     [BlockType.GRASS]: 0,
     [BlockType.DIRT]: 0,
     [BlockType.STONE]: 0,
+    [BlockType.WOOD]: 0,
+    [BlockType.LEAVES]: 0,
+    [BlockType.SAND]: 0,
+    [BlockType.SNOW]: 0,
   },
 
   // Hotbar setup (5 slots mapping to block types)
@@ -14,8 +18,8 @@ const useInventoryStore = create((set, get) => ({
     BlockType.GRASS,
     BlockType.DIRT,
     BlockType.STONE,
-    null, // Empty slot
-    null  // Empty slot
+    BlockType.WOOD,
+    BlockType.SAND
   ],
 
   // Currently selected hotbar slot (0-4)
@@ -95,6 +99,10 @@ const useInventoryStore = create((set, get) => ({
       [BlockType.GRASS]: 0,
       [BlockType.DIRT]: 0,
       [BlockType.STONE]: 0,
+      [BlockType.WOOD]: 0,
+      [BlockType.LEAVES]: 0,
+      [BlockType.SAND]: 0,
+      [BlockType.SNOW]: 0,
     },
     selectedSlot: 0
   }),
@@ -107,6 +115,8 @@ const useInventoryStore = create((set, get) => ({
       [BlockType.GRASS]: 64,
       [BlockType.DIRT]: 64,
       [BlockType.STONE]: 64,
+      [BlockType.WOOD]: 32,
+      [BlockType.SAND]: 32,
     }
   })
 }));
