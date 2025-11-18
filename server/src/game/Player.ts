@@ -124,7 +124,8 @@ export class PlayerEntity implements PlayerType {
       deaths: this.deaths,
       color: this.color,
       isAlive: this.isAlive,
-      lastShot: this.lastShot
+      lastShot: this.lastShot,
+      isBot: false
     };
   }
 }

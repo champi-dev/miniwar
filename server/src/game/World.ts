@@ -1,4 +1,5 @@
 import { PlayerEntity } from './Player.js';
+import { BotEntity } from './Bot.js';
 import { BulletEntity } from './Bullet.js';
 import { TerrainGenerator } from './Terrain.js';
 import { Physics } from './Physics.js';
@@ -15,11 +16,71 @@ export class World {
   terrain: TerrainObject[] = [];
   private bulletIdCounter = 0;
   private pendingRespawns: Map<string, number> = new Map();
+  private botIdCounter = 0;
+  private lastBotSpawn = Date.now();
+  private readonly MIN_BOTS = 3;
+  private readonly MAX_BOTS = 6;
 
   constructor() {
     // Generate terrain
     const terrainGen = new TerrainGenerator();
     this.terrain = terrainGen.generate();
+
+    // Spawn initial bots
+    this.spawnInitialBots();
+  }
+
+  private spawnInitialBots(): void {
+    const botNames = [
+      'AlphaBot', 'BetaBot', 'GammaBot', 'DeltaBot',
+      'OmegaBot', 'SigmaBot', 'ThetaBot', 'ZetaBot'
+    ];
+
+    const initialBotCount = this.MIN_BOTS;
+    for (let i = 0; i < initialBotCount; i++) {
+      this.spawnBot(botNames[i % botNames.length] + (i > 7 ? i : ''));
+    }
+  }
+
+  private spawnBot(name?: string): BotEntity {
+    const botId = `bot_${this.botIdCounter++}`;
+    const botName = name || `Bot${this.botIdCounter}`;
+    const spawnPoint = this.getSpawnPoint();
+
+    // Random difficulty: 50% medium, 50% hard
+    const difficulty = Math.random() > 0.5 ? 'hard' : 'medium';
+
+    const bot = new BotEntity(botId, botName, spawnPoint.x, spawnPoint.y, difficulty);
+    this.players.set(botId, bot);
+
+    console.log(`Spawned ${difficulty} bot: ${botName}`);
+    return bot;
+  }
+
+  private manageBots(): void {
+    // Count current bots
+    let botCount = 0;
+    for (const player of this.players.values()) {
+      if (player instanceof BotEntity) {
+        botCount++;
+      }
+    }
+
+    // Spawn new bots if below minimum
+    if (botCount < this.MIN_BOTS) {
+      const botsToSpawn = this.MIN_BOTS - botCount;
+      for (let i = 0; i < botsToSpawn; i++) {
+        this.spawnBot();
+      }
+    }
+
+    // Occasionally spawn additional bots up to max (every 30-60 seconds)
+    const now = Date.now();
+    const spawnInterval = 30000 + Math.random() * 30000; // 30-60s
+    if (botCount < this.MAX_BOTS && now - this.lastBotSpawn > spawnInterval) {
+      this.spawnBot();
+      this.lastBotSpawn = now;
+    }
   }
 
   addPlayer(id: string, username: string): PlayerEntity {
@@ -70,8 +131,24 @@ export class World {
   update(deltaTime: number): PlayerDeathPayload[] {
     const deaths: PlayerDeathPayload[] = [];
 
-    // Update players
+    // Manage bot population
+    this.manageBots();
+
+    // Update players (including bots)
     for (const [id, player] of this.players) {
+      // Update bot AI
+      if (player instanceof BotEntity && player.isAlive) {
+        player.updateAI(this.players, deltaTime);
+
+        // Bots shoot when they want to
+        if (player.wantsToShoot() && player.canShoot()) {
+          const spawnDistance = GAME_CONFIG.PLAYER_RADIUS + 5;
+          const bulletX = player.x + Math.cos(player.angle) * spawnDistance;
+          const bulletY = player.y + Math.sin(player.angle) * spawnDistance;
+          this.createBullet(player.id, bulletX, bulletY, player.angle);
+        }
+      }
+
       if (player.isAlive) {
         const oldX = player.x;
         const oldY = player.y;

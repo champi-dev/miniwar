@@ -13,6 +13,7 @@ export interface Player {
   color: string; // hex color
   isAlive: boolean;
   lastShot: number; // timestamp
+  isBot?: boolean; // true if this is an AI bot
 }
 
 // Bullet data structure
@@ -109,7 +110,7 @@ export interface LeaderboardUpdatePayload {
 export const GAME_CONFIG = {
   WORLD_WIDTH: 2000,
   WORLD_HEIGHT: 2000,
-  PLAYER_SPEED: 200, // px/s
+  PLAYER_SPEED: 300, // px/s (50% faster for better mobile gameplay)
   PLAYER_RADIUS: 16,
   PLAYER_MAX_HEALTH: 100,
   BULLET_SPEED: 600, // px/s
